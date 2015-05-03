@@ -8,23 +8,22 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.RenderingHints;
-import java.awt.Shape;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.InputMismatchException;
-import java.util.Scanner;
+import java.util.List;
 
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
 import VectorEditor.Rectangle;
+import VectorEditor.VectorContainer;
 import VectorEditor.VectorShape;
+
+
 
 /**
  * v1.1.1
@@ -38,8 +37,6 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 	
 	private int id;
 	private int width, height;
-	//Array list which stores shape instances
-	private ArrayList<VectorShape> vectorShapes = new ArrayList<VectorShape>();
 	//Mouse motion indicators
 	private Point drawStart, drawEnd;
 	//Indicates mouse dragging state
@@ -54,8 +51,9 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 		EYEDROPPER
 	}
 	private Tools tool = Tools.RECTANGLE;
+	private List<CanvasObserver> observers = new ArrayList<CanvasObserver>();
 	
-	//Temoporal tools count for demo
+	//Temporal tools count for demo
 	int count;
 	
 	/**
@@ -68,10 +66,30 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 		this.width = width;
 		this.height = height;
 		super.setPreferredSize(new Dimension(this.width, this.height));
-    super.setBackground(Color.WHITE); 
+    super.setBackground(new Color(232, 232, 232)); 
     super.addMouseListener(this);
     super.addMouseWheelListener(this);
-    super.addMouseMotionListener(this);  	
+    super.addMouseMotionListener(this); 
+	}
+	
+	public void attatch(CanvasObserver o) {
+		this.observers.add(o);
+	}
+	
+	public void notifyToUpdatePropertiesPanel(VectorShape v){
+	   for (CanvasObserver observer : observers) {
+	      observer.updateProperties(v);
+	   }
+	}
+	public void notifyToUpdateLayersPanel() {
+		for (CanvasObserver observer : observers) {
+      observer.updateShapeList(VectorContainer.get());
+   }
+	}
+	public void notifyToUpdateHistoryPanel(Config.Actions act) {
+		for (CanvasObserver observer : observers) {
+      observer.updateHistoryList(act);
+   }
 	}
 	
 	/**
@@ -131,30 +149,31 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 	  	
 	  	case PICK:
 	  		//Scan layers in order DESC by time created
-	  		Collections.reverse(vectorShapes);
-	      for(int i = 0; i < vectorShapes.size(); i++) {
+	      for(int i = VectorContainer.lastIndex(); i >= 0; i--) {
 	      	//If a shape in selection area
-	      	if(vectorShapes.get(i).getShape().contains(e.getPoint())) {
-	      		if(!vectorShapes.get(i).isSelected()) {
+	      	if(VectorContainer.get(i).getShape().contains(e.getPoint()) && !VectorContainer.get(i).isLocked()) {
+	      		//if(!VectorContainer.get(i).isSelected()) {
 	      			//Deselect any selected shapes
-	      			for(int j = 0; j < vectorShapes.size(); j++) {
-	      				vectorShapes.get(j).deselect();
+	      			for(int j = VectorContainer.lastIndex(); j >= 0; j--) {
+	      				VectorContainer.get(j).deselect();
 	      			}
-		      		vectorShapes.get(i).select();
-	      		} else if (!dragging){
-	      			vectorShapes.get(i).deselect();	
+	      			VectorContainer.get(i).select();
+	      			notifyToUpdateLayersPanel();
+	      			notifyToUpdatePropertiesPanel(VectorContainer.get(i));
+	      		/*} else if (!dragging){
+	      			//vectorShapes.get(i).deselect();	
 	      		} else {
 	      			dragging = false;
-	      		}	      		
+	      		}	 */     		
 	      		repaint();
 	      		break;
 	        } else {
-	        	vectorShapes.get(i).deselect();
+	        	VectorContainer.get(i).deselect();
+	        	notifyToUpdatePropertiesPanel(VectorContainer.get(i));
+	        	notifyToUpdateLayersPanel();
 	  	      repaint();
 	        }
 	      }
-	      //Restore shape list order
-	      Collections.reverse(vectorShapes);
 	      break;
 	      
 	  	default:
@@ -176,11 +195,15 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 	  		//Creates a canvas shape
 	    	VectorShape rect = new Rectangle(drawStart.x, drawStart.y, e.getX(), e.getY());
 	    	if (drawStart.x != e.getX() && drawStart.y != e.getY()) {
-	      	vectorShapes.add(rect);
+	    		VectorContainer.add(rect);
+	    		
+	    		notifyToUpdateHistoryPanel(Config.Actions.RECTANGLE_TOOL_USED);
+	    		notifyToUpdateLayersPanel();
+	    		
 	        drawStart = null;
 	        drawEnd = null;
 	        count++;
-	        if(count == 3) {
+	        if(count == 6) {
 	        	this.tool = Tools.PICK;
 	        }
 		      repaint();
@@ -190,6 +213,8 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 	    	default:
 				break;
 	    }
+	  	
+	  	
 		}
 	}
  
@@ -199,22 +224,20 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 	 	case PICK:
 	 		
 	 		//Scan layers in order they were created
-	 		Collections.reverse(vectorShapes);
-	     for(int i = 0; i < vectorShapes.size(); i++) {
-	    	 if(vectorShapes.get(i).isSelected()) {
-	     		if(vectorShapes.get(i).getShape().contains(e.getPoint()) && vectorShapes.get(i).getShape().contains(drawEnd)) {
-		     		vectorShapes.get(i).drag(drawStart, e.getPoint());
+	     for(int i = VectorContainer.lastIndex(); i >= 0; i--) {
+	    	 if(VectorContainer.get(i).isSelected() && !VectorContainer.get(i).isLocked()) {
+	     		if(VectorContainer.get(i).getShape().contains(e.getPoint()) && VectorContainer.get(i).getShape().contains(drawEnd)) {
+	     			VectorContainer.get(i).drag(drawStart, e.getPoint());
 		     		drawStart = new Point(e.getX(), e.getY());
 	  	      drawEnd = drawStart;
 	  	      dragging = true;
+	  	      notifyToUpdatePropertiesPanel(VectorContainer.get(i));
+	  	      //notifyToUpdateHistoryPanel(Config.Actions.SHAPE_MOVED);
 		     		repaint();
 		     		break;
 	     		}
 	      }
 	    }
-	    //Restore shape list order
-	    Collections.reverse(vectorShapes);
-	    
 	    break;
 	 	case RECTANGLE:
 	 	  //Create guides
@@ -231,21 +254,20 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 		switch(tool) {
   	case PICK:
   		//Scan layers in order they were created
-  		Collections.reverse(vectorShapes);
-      for(int i = 0; i < vectorShapes.size(); i++) {
+      for(int i = VectorContainer.lastIndex(); i >= 0; i--) {
       	//If shape in selection are
-      	if(vectorShapes.get(i).isSelected()) {
+      	if(VectorContainer.get(i).isSelected() && !(VectorContainer.get(i).isLocked())) {
       		if(e.getWheelRotation() > 0) {
-      			vectorShapes.get(i).transform(5, 0);
+      			VectorContainer.get(i).transform(5, 0);
+      			notifyToUpdatePropertiesPanel(VectorContainer.get(i));
       		} else {
-      			vectorShapes.get(i).transform(5, 1);
+      			VectorContainer.get(i).transform(5, 1);
+      			notifyToUpdatePropertiesPanel(VectorContainer.get(i));
       		}
       		repaint();
       		break;
       	}
       }
-      //Restore shape list order
-      Collections.reverse(vectorShapes);
       break;
   	default:
   		break;
@@ -260,13 +282,15 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
             RenderingHints.VALUE_ANTIALIAS_ON);
     
     //Paints shapes on canvas
-    for(int i = 0; i < vectorShapes.size(); i++) {
-    	graphSettings.setPaint(vectorShapes.get(i).getFillColor());
-    	graphSettings.fill(vectorShapes.get(i).getShape());
-    	
-    	graphSettings.setPaint(vectorShapes.get(i).getStrokeColor());
-    	graphSettings.setStroke(new BasicStroke(vectorShapes.get(i).getStrokeSize()));
-    	graphSettings.draw(vectorShapes.get(i).getShape());
+    for(int i = 0; i < VectorContainer.size(); i++) {
+    	if(VectorContainer.get(i).isVisible()) {
+	    	graphSettings.setPaint(VectorContainer.get(i).getFillColor());
+	    	graphSettings.fill(VectorContainer.get(i).getShape());
+	    	
+	    	graphSettings.setPaint(VectorContainer.get(i).getStrokeColor());
+	    	graphSettings.setStroke(new BasicStroke(VectorContainer.get(i).getStrokeSize()));
+	    	graphSettings.draw(VectorContainer.get(i).getShape());
+    	}
     }
     
     //Guide shape used for drawing
@@ -297,6 +321,50 @@ public class Canvas extends JPanel implements MouseListener, MouseMotionListener
 	
 	@Override
 	public void mouseMoved(MouseEvent e) {
+	}
+
+	public void update(ArrayList<Integer> data) {
+		
+		for(int i = VectorContainer.lastIndex(); i >= 0; i--) {
+    	if(VectorContainer.get(i).isSelected()) {
+    		
+    		VectorContainer.get(i).setStrokeSize(data.get(0));
+    		VectorContainer.get(i).setOpacity(data.get(1));
+    		VectorContainer.get(i).resize(data.get(2), data.get(3));
+    		VectorContainer.get(i).setPosition(data.get(4), data.get(5));
+    		repaint();
+    		break;
+      } else {
+      	VectorContainer.get(i).deselect();
+      	notifyToUpdatePropertiesPanel(VectorContainer.get(i));
+	      repaint();
+      }
+    }	
+	}
+
+	public void updateShapeListItem(int id, boolean visible, boolean locked, boolean selected) {
+		VectorContainer.get(id).setVisible(visible);
+		VectorContainer.get(id).setLocked(locked);
+		if (selected) {
+			VectorContainer.get(id).select();
+		} else {
+			VectorContainer.get(id).deselect();
+		}
+	}
+
+	public void updateShapeList(ArrayList<VectorShape> data) {
+		VectorContainer.set(data);
+		notifyToUpdateLayersPanel();
+		repaint();
+	}
+	
+	public void rewindHistory(int step) {
+		ArrayList<VectorShape> tmp = VectorContainer.getStep(step);
+		for(VectorShape s : tmp) {
+			s.deselect();
+		}
+		VectorContainer.set(tmp);
+		notifyToUpdateLayersPanel();
 	}
 	
 }

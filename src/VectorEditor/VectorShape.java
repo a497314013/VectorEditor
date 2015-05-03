@@ -11,7 +11,7 @@ import javax.swing.JComponent;
  * features any vector shape can have
  * @author Þilvinas
  */
-public abstract class VectorShape extends JComponent {
+public abstract class VectorShape {
 	
 	// Constants for default shape style
 	protected final Color DEFAULT_FILL_COLOR = new Color(93, 169, 232);
@@ -25,13 +25,14 @@ public abstract class VectorShape extends JComponent {
 		UNSPECIFIED,
 		RECTANGLE,
 		LINE,
-		ELIPSE,
-		POLYGON,
+		CIRCLE,
+		CURVE,
 		CUSTOM
 	}
 	private Types type = Types.UNSPECIFIED;
 	
 	private static int id = 0;
+	private int number;
 	
 	private Point position;
 	private int width, height;
@@ -42,6 +43,8 @@ public abstract class VectorShape extends JComponent {
 	private Color strokeColor = DEFAULT_STROKE_COLOR;
 	private Color strokeColorBckp = DEFAULT_STROKE_COLOR;
 	private int strokeSize = DEFAULT_STROKE_SIZE;
+	private boolean visible = true;
+	private boolean locked = false;
 	
 	private boolean isSelected = false;
 	
@@ -61,6 +64,7 @@ public abstract class VectorShape extends JComponent {
 		this.position = new Point(Math.min(x1, x2), Math.min(y1, y2));
 		if(status == 0) {
 			++VectorShape.id;
+			this.number = id;
 		}
 	}
 	
@@ -142,7 +146,7 @@ public abstract class VectorShape extends JComponent {
 	 * Sets a shape's opacity
 	 * @param opacity (range = [0..1])
 	 */
-	public final void setOpeacity(float opacity) {
+	public final void setOpacity(float opacity) {
 		this.opacity = opacity;
 	}
 	
@@ -168,11 +172,27 @@ public abstract class VectorShape extends JComponent {
 	}
 	
 	/**
+	 * Sets a shape's visibility
+	 * @param visible
+	 */
+	public void setVisible(boolean visible) {
+		this.visible = visible;
+	}
+	
+	/**
+	 * Sets a shape's lock state
+	 * @param locked
+	 */
+	public void setLocked(boolean locked) {
+		this.locked = locked;
+	}
+	
+	/**
 	 * Returns a shape's name
 	 * @return
 	 */
 	public final String getName() {
-		return getType().toString() + " " + VectorShape.id;
+		return getType().toString() + " " + number;
 	}
 	
 	/**
@@ -181,6 +201,10 @@ public abstract class VectorShape extends JComponent {
 	 */
 	public final Types getType() {
 		return this.type;
+	}
+	
+	public final String getTypeAsString() {
+		return this.type.toString();
 	}
 	
 	/**
@@ -270,7 +294,7 @@ public abstract class VectorShape extends JComponent {
 	 * Deselects a shape
 	 */
 	public final void deselect() {
-		this.strokeColor = this.strokeColorBckp;
+		this.strokeColor = DEFAULT_STROKE_COLOR;
 		this.strokeSize = DEFAULT_STROKE_SIZE;
 		this.isSelected = false;
 	}
@@ -284,6 +308,22 @@ public abstract class VectorShape extends JComponent {
 	}
 	
 	/**
+	 * Checks if a shape is visible
+	 * @return
+	 */
+	public final boolean isVisible() {
+		return this.visible;
+	}
+	
+	/**
+	 * Checks if a shape is visible
+	 * @return
+	 */
+	public final boolean isLocked() {
+		return this.locked;
+	}
+	
+	/**
 	 * Displays shape object data in a string block
 	 */
 	public String toString() {
@@ -293,7 +333,7 @@ public abstract class VectorShape extends JComponent {
 				getPosition().toString() + ",\n\tfill=" + getFillColor().toString() + 
 				",\n\tstroke=[color=" + getStrokeColor().toString() + ", " + "size=" + 
 				getStrokeSize() + "],\n\topacity=" + getOpacity() + ",\n\tselected=" + 
-				isSelected() + "\n]";
+				isSelected() + "\n\tvisible=" + isVisible()+ "\n\tlocked=" + isLocked() +"\n]";
 		return result;
 	}
 	
@@ -307,7 +347,7 @@ public abstract class VectorShape extends JComponent {
 				getPosition().toString() + ",\n\tfill=" + getFillColor().toString() + 
 				",\n\tstroke=[color=" + getStrokeColor().toString() + ", " + "size=" + 
 				getStrokeSize() + "],\n\topacity=" + getOpacity() + ",\n\tselected=" + 
-				isSelected() + "\n]";
+				isSelected() + "\n\tvisible=" + isVisible()+ "\n\tlocked=" + isLocked() +"\n]";
 		System.out.println(result);
 	}
 	
@@ -329,5 +369,7 @@ public abstract class VectorShape extends JComponent {
 	 * @param end
 	 */
 	public abstract void drag(Point start, Point end);
+	
+	public abstract void resize(int width, int height);
 		
 }

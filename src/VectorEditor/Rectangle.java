@@ -88,4 +88,12 @@ public class Rectangle extends VectorShape {
 				getWidth(), getHeight()));
 	}
 	
+	@Override
+	public void resize(int width, int height) {
+		setWidth(width);
+		setHeight(height);
+		setShape(new Rectangle2D.Float(getPosition().x, getPosition().y, 
+				getWidth(), getHeight()));
+	}
+	
 }
